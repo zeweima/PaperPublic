@@ -17,11 +17,9 @@ keywords:
   - Watershed Hydrology
   - Water Quality
   - Machine Learning (applied to Earth/env science)
-  - Geomorphology
   - Land Surface Modeling
   - Biogeochemistry
   - Agroecosystem modeling
-  - Geology
   - Remote Sensing
   - Water Resources
   - Environmental Science
@@ -96,6 +94,27 @@ sources:
     issns: ["0886-6236", "1944-9224"]
   - name: Geoscientific Model Development
     issns: ["1991-959X", "1991-9603"]
+  - name: Nature Water
+    issns: ["2731-6084"]
+  - name: Earth's Future
+    issns: ["2328-4277"]
+  - name: JGR Machine Learning and Computation
+    issns: ["2993-5210"]
+
+# arXiv preprint server. Free OA, full PDFs always available. Categories below
+# are the most useful for this user's research interests; comment out any that
+# add too much noise. Keyword filter (paper-filterer) handles relevance further.
+arxiv:
+  enabled: true
+  categories:
+    - physics.ao-ph    # atmospheric and oceanic physics
+    - physics.flu-dyn  # fluid dynamics (sometimes hydrology methods)
+    - cs.LG            # machine learning (filtered for Earth-app)
+    - stat.ML          # statistics / ML
+    - eess.IV          # remote-sensing image processing
+    - cs.CV            # vision (sometimes RS-related)
+  # arXiv has a polite-rate limit (3s between calls). Be conservative.
+  per_category_max: 100   # cap per category per fetch run
 
 # Email delivery. Gmail SMTP. Password lives in .env (SMTP_PASSWORD), never here.
 email:
