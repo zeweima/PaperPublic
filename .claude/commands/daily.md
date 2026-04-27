@@ -11,7 +11,18 @@ Read `python_path` from `papers/config.yaml` and use that for every Python invoc
 ## Pipeline
 
 ### 1. Fetch
-Run `<python_path> scripts/fetch.py` from the project root. Set env `PYTHONIOENCODING=utf-8` to avoid Windows cp1252 issues. The script reads `papers/state.json` for `last_daily` and uses a lookback (default 10 days) on OpenAlex `created_date` to catch papers indexed slightly late; dedup via `seen_ids` prevents repeats. Capture the path it prints on the last line — that is the raw JSON. Note today's date for use later.
+Run `<python_path> scripts/fetch.py` from the project root with env `PYTHONIOENCODING=utf-8`. The script reads `papers/state.json` for `last_daily` and uses a lookback (default 35 days) on OpenAlex `publication_date`; dedup via `seen_ids` + `seen_dois` prevents repeats. Capture the **relative path** it prints on the last line — that is the raw JSON (typically `papers/raw/<date>.json`). Note today's date for use later.
+
+### 1b. Fetch arXiv preprints (append into the same raw JSON)
+If `arxiv.enabled` is true in config, run:
+
+```
+<python_path> scripts/fetch_arxiv.py --merge papers/raw/<today>.json
+```
+
+This pulls preprints in the configured arXiv categories and appends them into today's raw JSON (deduped by id). arXiv papers carry `is_oa: true` and an `oa_url`, so the downloader will fetch their PDFs for free.
+
+Skip silently if arxiv is disabled.
 
 ### 2. Filter
 Read the raw JSON to check the count.
@@ -26,7 +37,19 @@ From the filtered JSON, build a **summarization list**:
 - Sort by score descending, then by venue prestige (Nature/Science/Sci Adv/PNAS first), then by date desc.
 - Trim to the first `max_summaries_per_run` entries.
 
-For each paper in that summarization list, spawn a `paper-summarizer` subagent. **Run them in parallel** — issue all the Agent tool calls in a single message. If there are more than 10, run them in batches of 10. Each subagent writes to `papers/notes/<id>.md` and prints its path.
+### 3a. Download full text (best-effort)
+Before summarizing, run:
+
+```
+<python_path> scripts/download_fulltext.py papers/raw/<today>.filtered.json
+```
+
+This iterates over the top picks, tries the OpenAlex `open_access.oa_url` first, falls back to Unpaywall by DOI, and saves verified PDFs to `papers/fulltext/<id>.pdf` (skipping cached ones, discarding non-PDF responses). Capture the success count from the last line of output for the run log.
+
+Best-effort — some publishers (Wiley AGU, Elsevier, ACS) routinely return 0 OA hits and that's expected. The summarizer falls back to the abstract when no PDF is available.
+
+### 3b. Summarize
+For each paper in the summarization list, spawn a `paper-summarizer` subagent. **Run them in parallel** — issue all the Agent tool calls in a single message. If there are more than 10, run them in batches of 10. Each subagent automatically reads `papers/fulltext/<id>.pdf` if present, otherwise uses the abstract. Each writes to `papers/notes/<id>.md` and prints its path.
 
 Papers that pass the filter but are NOT on the summarization list (score 6-7, plus excess top picks beyond the cap) do **not** get a per-paper note. They will appear in the digest using their OpenAlex abstract directly — `digest-writer` reads the filtered JSON for those.
 
@@ -48,10 +71,21 @@ Run:
 <python_path> scripts/send_email.py papers/daily/<today>.md --subject "Daily papers — <today>"
 ```
 
-### 7. Report
-Print a tight summary to the user:
-- raw fetched / passed filter / top picks
-- digest path
+### 7. Log the run
+Append a structured entry to `papers/runs.jsonl`:
+
+```
+<python_path> scripts/log_run.py --type daily --date <today> \
+    --fetched <N> --filtered <M> --top-picks <T> \
+    --summarized <S> --fulltext <F> \
+    --digest papers/daily/<today>.md \
+    --email-status <sent|failed>
+```
+
+### 8. Report
+Print a tight summary to the user. **Always show file paths as relative to the project root** (e.g. `papers/daily/2026-04-27.md`, never the full Windows absolute path):
+- raw fetched / passed filter / top picks / summarized / fulltext-downloaded
+- digest path (relative)
 - email status (sent / failed)
 
 ## Failure handling

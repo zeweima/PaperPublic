@@ -28,5 +28,14 @@ Set `last_monthly` in `papers/state.json` to `<YYYY>-<MM>`.
 <python_path> scripts/send_email.py papers/monthly/<YYYY-MM>.md --subject "Monthly papers — <YYYY-MM>"
 ```
 
-### 5. Report
-Print: digest path, # source weekly digests, email status.
+### 5. Log the run
+
+```
+<python_path> scripts/log_run.py --type monthly --date <YYYY-MM> \
+    --digest papers/monthly/<YYYY-MM>.md \
+    --email-status <sent|failed> \
+    --note "aggregated <K> weekly digests"
+```
+
+### 6. Report
+Print: digest path (**relative**, e.g. `papers/monthly/2026-04.md`), # source weekly digests, email status.

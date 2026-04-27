@@ -56,7 +56,7 @@ def fetch_source(name, issns, from_date, to_date, contact):
     params = {
         "filter": flt,
         "per-page": "200",
-        "select": "id,doi,title,authorships,publication_date,abstract_inverted_index,primary_location",
+        "select": "id,doi,title,authorships,publication_date,abstract_inverted_index,primary_location,open_access",
         "mailto": contact,
     }
     url = f"{OPENALEX}?{urllib.parse.urlencode(params)}"
@@ -77,6 +77,7 @@ def fetch_source(name, issns, from_date, to_date, contact):
             return []
     out = []
     for w in data.get("results", []):
+        oa = w.get("open_access") or {}
         out.append({
             "id": w["id"].rsplit("/", 1)[-1],
             "doi": w.get("doi"),
@@ -86,6 +87,11 @@ def fetch_source(name, issns, from_date, to_date, contact):
             "date": w.get("publication_date"),
             "venue": name,
             "url": w.get("doi") or w["id"],
+            "open_access": {
+                "is_oa": oa.get("is_oa"),
+                "oa_url": oa.get("oa_url"),
+                "oa_status": oa.get("oa_status"),  # "gold", "green", "hybrid", "bronze", or null
+            },
         })
     return out
 
@@ -144,18 +150,19 @@ def main():
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     out_file = RAW_DIR / f"{to_date}.json"
+    rel = out_file.relative_to(ROOT).as_posix()
     if out_file.exists() and not args.force:
         print(f"Total: {total_fetched} fetched, {len(deduped)} new unique papers")
-        print(f"REFUSING to overwrite existing {out_file.name} (use --force).")
+        print(f"REFUSING to overwrite existing {rel} (use --force).")
         print(f"Existing file preserved.")
-        # Still print path on last line so orchestrator can proceed with existing data.
-        print(out_file)
+        # Last line: machine-readable relative path for the orchestrator.
+        print(rel)
         return
     out_file.write_text(json.dumps(deduped, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Total: {total_fetched} fetched, {len(deduped)} new unique papers")
-    print(f"Wrote: {out_file}")
-    # Last line: machine-readable path for the orchestrator.
-    print(out_file)
+    print(f"Wrote: {rel}")
+    # Last line: machine-readable relative path for the orchestrator.
+    print(rel)
 
 
 if __name__ == "__main__":

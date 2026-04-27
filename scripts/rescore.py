@@ -58,13 +58,14 @@ def main():
 
     out = RAW_DIR / "rescore_input.json"
     out.write_text(json.dumps(unique, indent=2, ensure_ascii=False), encoding="utf-8")
+    rel = out.relative_to(ROOT).as_posix()
     print(f"Combined {len(raw_files)} raw files -> {len(unique)} unique papers")
-    print(f"Wrote: {out}")
+    print(f"Wrote: {rel}")
     print()
     print("Next step (in Claude Code, in this directory):")
-    print(f"  Spawn paper-filterer with input = {out}")
+    print(f"  Spawn paper-filterer with input = {rel}")
     print("  Then optionally re-summarize / regenerate any digest(s) you care about.")
-    print(out)
+    print(rel)
 
 
 if __name__ == "__main__":

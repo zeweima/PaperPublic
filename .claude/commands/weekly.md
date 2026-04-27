@@ -26,5 +26,14 @@ Set `last_weekly` in `papers/state.json` to the week label. Do not touch `seen_i
 <python_path> scripts/send_email.py papers/weekly/<YYYY-Www>.md --subject "Weekly papers — <YYYY-Www>"
 ```
 
-### 5. Report
-Print: digest path, # source daily digests included, email status.
+### 5. Log the run
+
+```
+<python_path> scripts/log_run.py --type weekly --date <YYYY-Www> \
+    --digest papers/weekly/<YYYY-Www>.md \
+    --email-status <sent|failed> \
+    --note "aggregated <K> daily digests"
+```
+
+### 6. Report
+Print: digest path (**relative**, e.g. `papers/weekly/2026-W17.md`), # source daily digests included, email status.

@@ -84,6 +84,91 @@ schtasks /create /tn "PaperTracker-Monthly" ^
 
 (The monthly form above runs on the first Monday — adjust to `/d 1` for the 1st of the month if you prefer; `schtasks` syntax is finicky, the GUI is often easier.)
 
+## Full-text PDFs
+
+For top picks the pipeline tries to download the open-access PDF before summarizing. The summarizer reads the PDF directly (Claude's Read tool supports PDFs natively; we read `pages: "1-12"` covering abstract / intro / methods / key results) — much richer than abstract-only.
+
+### When PDFs are retrieved
+
+**Only for top picks** — that is, papers with score ≥ `top_picks_threshold` (default 8) that also fall within `max_summaries_per_run` (default 30). These are the papers that get a per-paper note, so they're the ones that benefit from richer source text. Score 6–7 papers stay abstract-only; the cost/benefit doesn't justify the download time.
+
+The download happens between the filter step and the summarize step in `/daily`. PDFs are cached in [`papers/fulltext/<id>.pdf`](papers/fulltext/) — re-runs skip already-cached papers.
+
+### How OA papers are retrieved
+
+The downloader tries strategies in order, stopping at the first success:
+
+1. **Copernicus DOI transform** — for DOI prefix `10.5194/`, build the direct PDF URL (`https://<journal>.copernicus.org/articles/.../<journal>-X-Y-Z.pdf`). No API call needed.
+2. **Publisher cookie session** — for OA papers from Wiley AGU (`10.1029/`), Wiley general (`10.1111/`, `10.1002/`), and AAAS (`10.1126/`), visit the article landing page first to seed a session cookie, then request `/doi/pdfdirect/<doi>` (Wiley) or `/doi/pdf/<doi>` (AAAS). This is what unlocks WRR / GRL / GBC / JAMES / JGR-BG / GCB / Sci Adv even though they "look paywalled" to a naive script.
+3. **OpenAlex `oa_url`** — already populated in fetched data; works for many smaller OA journals.
+4. **Unpaywall API fallback** — by DOI; walks all `oa_locations` (publisher + repository copies) for a `url_for_pdf`.
+
+Each downloaded blob is verified for the `%PDF` magic-byte signature, so paywall HTML pages don't pollute the cache.
+
+### Realistic hit-rate by publisher (your sources)
+
+The numbers below assume the script runs from a **subscribing IP** — i.e. on UIUC campus or via UIUC VPN. From a non-campus connection, paywalled-but-IP-accessible papers (Nature, IOP, etc.) drop substantially; OA papers (Wiley AGU, Sci Adv, Copernicus, arXiv) are unaffected.
+
+| Publisher / journal group | DOI prefix | Strategy that works | Hit rate (campus) |
+|---|---|---|---|
+| Copernicus (HESS, GMD) | 10.5194 | Copernicus transform | ~95% |
+| Wiley AGU (GRL, WRR, GBC, JAMES, JGR-BG, Earth's Future, JGR ML&C) | 10.1029 | Wiley two-step cookies | ~95% |
+| Wiley general (Global Change Biology) | 10.1111 | Wiley two-step cookies | ~80% |
+| AAAS (Science Advances) | 10.1126/sciadv | AAAS two-step cookies | ~80% |
+| AAAS (Science) | 10.1126/science | AAAS two-step cookies | ~30% (most still paywalled even on campus) |
+| **Nature family (Nature, Sustainability, Climate, Food, Geoscience, Water)** | 10.1038 | **Nature direct URL** | **~95% on campus, ~25% off-campus** |
+| IOP (ERL) | 10.1088 | OpenAlex / Unpaywall | ~70% |
+| PNAS | 10.1073 | OpenAlex / Unpaywall | ~50% |
+| arXiv preprints | n/a | OpenAlex `oa_url` direct | 100% |
+| Elsevier (AgrForMet, FCR, Geoderma, S&TR, Water Research, Soil Biol Biochem, One Earth) | 10.1016 | — | ~5% (ScienceDirect / Radware bot block, even on campus) |
+| ACS (ES&T) | 10.1021 | — | ~5% (similar bot block) |
+| Springer (Biogeochemistry) | 10.1007 | OpenAlex / Unpaywall | ~30% |
+
+When no OA / accessible copy is found, the summarizer falls back to the abstract. The note's `Source:` field records which source was used (`full text` vs `abstract`).
+
+### Notes on access
+
+- **Campus IP for paywalled journals** — when running this on UIUC campus (or via UIUC VPN), the system gets institutional access automatically because the publisher sees the request from `*.illinois.edu`. The Nature direct-URL strategy specifically depends on this. Off-campus, fewer Nature-family papers will succeed.
+- **Wiley OA journals** — WRR, GRL, JAMES, GBC, JGR-BG, Earth's Future, JGR ML&C are all gold-OA. They previously failed because Wiley's Cloudflare layer blocks scripted PDF requests until a session cookie is present. The cookie-seeded two-step fetch now handles this; these download reliably.
+- **Elsevier — needs API key + Institutional Token for full text.** ScienceDirect's web layer uses Radware Bot Manager (JS fingerprinting); it rejects scripted requests **regardless of IP or wait time**, so slowing the pipeline does *not* help. The Elsevier API can bypass Radware, but a free `dev.elsevier.com` key alone returns only a 1-page teaser (cover page) — not the full article. Full text requires a `X-ELS-Insttoken` header issued by your institution.
+  - **What you have now** (`ELSEVIER_API_KEY` set, no Insttoken): the downloader tries the API, gets a teaser, detects it (1 page, no References), rejects it, and falls back to abstract-only.
+  - **To unlock full text**: contact a UIUC science librarian or open a support request at Elsevier and ask them to associate your API key with the UIUC institution (they'll issue an Insttoken). Add it to `.env` as `ELSEVIER_INSTTOKEN=...`. The downloader picks it up automatically.
+  - **Without Insttoken**: Elsevier journals (`10.1016/*` — AgrForMet, FCR, Geoderma, S&TR, Water Research, SBB, One Earth) stay abstract-only. That's still useful — abstracts for these journals are usually substantive 200-300 word summaries.
+  - **Manual escape hatch**: if there's a particular Elsevier paper you want full-text on, download it from your browser into `papers/fulltext/<id>.pdf`. The summarizer will pick it up automatically.
+- **ACS** — same JS bot-detection story as Elsevier, but ACS doesn't have a free public API equivalent. ACS papers stay abstract-only.
+
+## Sources
+
+The system pulls from two sources, deduped against each other and against state:
+
+- **OpenAlex** — 29 journals (see `papers/config.yaml` `sources` list). Includes the Earth-system stack (Copernicus, AGU/Wiley, Elsevier env titles, Nature/Science family), the new AGU OA journals (Earth's Future, JGR ML&C, Nature Water), and the rest.
+- **arXiv** — preprints in 6 categories (`physics.ao-ph`, `physics.flu-dyn`, `cs.LG`, `stat.ML`, `eess.IV`, `cs.CV`). Always OA, always with full-text PDFs available. Caught by the same filterer / summarizer / digest pipeline as journal articles. arXiv preprints often appear weeks before journal publication, so this is the leading edge of the digest.
+
+The arXiv fetcher (`scripts/fetch_arxiv.py`) runs after the OpenAlex fetcher in `/daily`, appending its results into the same raw JSON. To disable arXiv, set `arxiv.enabled: false` in config.
+
+## Run log
+
+Every `/daily`, `/weekly`, `/monthly` invocation appends one JSON line to [`papers/runs.jsonl`](papers/runs.jsonl):
+
+```json
+{"timestamp":"2026-04-27T13:00:00+00:00","type":"daily","date":"2026-04-27","fetched":443,"filtered":158,"top_picks":92,"summarized":30,"fulltext_downloaded":18,"digest":"papers/daily/2026-04-27.md","email_status":"sent","note":""}
+```
+
+Quick views:
+```cmd
+:: last 10 runs
+"%LOCALAPPDATA%\miniconda3\python.exe" -c "from pathlib import Path; [print(l) for l in Path('papers/runs.jsonl').read_text(encoding='utf-8').splitlines()[-10:]]"
+
+:: weekly summary (totals by month)
+"%LOCALAPPDATA%\miniconda3\python.exe" -c "import json; from collections import Counter; from pathlib import Path; d=[json.loads(l) for l in Path('papers/runs.jsonl').read_text(encoding='utf-8').splitlines() if l]; c=Counter((r['date'][:7], r['type']) for r in d); [print(k, v) for k,v in sorted(c.items())]"
+```
+
+If you prefer `jq`-style filtering, the format is one-object-per-line standard JSONL.
+
+## Script changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in scripts, agents, and slash commands over time, with context on *why*.
+
 ## How many papers get summarized
 
 Two tiers per daily run:
