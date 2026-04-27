@@ -1,0 +1,5 @@
+.env
+papers/raw/
+papers/notes/
+__pycache__/
+*.pyc
