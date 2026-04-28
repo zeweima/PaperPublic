@@ -7,7 +7,7 @@
 A short prose paragraph (4–8 sentences) on what the week as a whole signals: which methods are recurring, which regions are hotspots, which debates flared up, which prior-week threads continued. Cite 4–8 papers inline as `<author> et al. [DOI]`.
 
 ## Read this weekend
-1. **<title>** — <venue>, <first author> et al. <One sentence on why this is *the* paper to open this weekend>. [DOI] · [notes](papers/notes/<id>.md)
+1. **<title>** — <venue>, <first author> et al. <One sentence on why this is *the* paper to open this weekend>. [DOI] · [notes](../notes/<id>.md)
 2. ...
 3. ...
 

@@ -18,7 +18,7 @@ Compose one daily digest.
 ## Two tiers of papers
 
 - **With note** (top picks that made the summarization cap): use the rich `Summary` and `Why it matters` fields from their note.
-- **Without note** (score 6–7, plus excess top picks beyond the cap): use the `abstract` and `title` from the filtered JSON to write a one-sentence finding.
+- **Without note** (papers that passed filtering but were not summarized): use the `abstract` and `title` from the filtered JSON to write a one-sentence finding.
 
 ## Reader workflow
 

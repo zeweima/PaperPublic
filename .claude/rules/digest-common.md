@@ -22,10 +22,10 @@ Use the `Tags` line in each paper's note to assign theme. A paper appears under 
 Standard themes (use these labels exactly):
 - Hydrology & water resources
 - Biogeochemistry & soils
-- Land-surface & agroecosystem modeling
+- Land-surface process & modeling
+- Agroecosystem process & modeling
 - Machine learning / methods
 - Remote sensing & observations
-- Geomorphology & geology
 - Climate & global change
 
 ## Accuracy

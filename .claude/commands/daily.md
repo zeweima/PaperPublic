@@ -6,12 +6,12 @@ Run the daily paper-tracking pipeline. Today's date in UTC is the run date.
 
 ## Python interpreter
 
-Read `python_path` from `config.yaml` and use that for every Python invocation below. On this machine the correct path is `C:/Users/zeweima2/AppData/Local/miniconda3/python.exe` — bare `python` will hit a Windows Store stub and fail.
+Read `python_path` from `config.yaml` and use it for every Python invocation below.
 
 ## Pipeline
 
 ### 1. Fetch
-Run `<python_path> scripts/fetch.py` from the project root with env `PYTHONIOENCODING=utf-8`. The script reads `papers/state.json` for `last_daily` and uses a lookback (default 35 days) on OpenAlex `publication_date`; dedup via `seen_ids` + `seen_dois` prevents repeats. Capture the **relative path** it prints on the last line — that is the raw JSON (typically `papers/raw/<date>.json`). Note today's date for use later.
+Run `<python_path> scripts/fetch.py` from the project root with env `PYTHONIOENCODING=utf-8`. The script reads `papers/state.json` for `last_daily` and uses `lookback_days` from `config.yaml` on OpenAlex `publication_date`; dedup via `seen_ids` + `seen_dois` prevents repeats. Capture the **relative path** it prints on the last line — that is the raw JSON (typically `papers/raw/<date>.json`). Note today's date for use later.
 
 ### 1b. Fetch arXiv preprints (append into the same raw JSON)
 If `arxiv.enabled` is true in config, run:
@@ -72,10 +72,10 @@ Delete the per-chunk artifacts so `papers/raw/` stays tidy:
 The final filtered path used by the rest of the pipeline is always `papers/raw/<today>.filtered.json`.
 
 ### 3. Summarize (parallel, capped)
-Read `max_summaries_per_run` from `config.yaml` (default 30) and `top_picks_threshold` (default 8).
+Read `max_summaries_per_run` and `top_picks_threshold` from `config.yaml`.
 
 From the filtered JSON, build a **summarization list**:
-- Take all papers with `top_pick: true` (i.e. score >= 8).
+- Take all papers with `top_pick: true` (i.e. score >= `top_picks_threshold`).
 - Sort by score descending, then by venue prestige (Nature/Science/Sci Adv/PNAS first), then by date desc.
 - Trim to the first `max_summaries_per_run` entries.
 
@@ -86,14 +86,12 @@ Before summarizing, run:
 <python_path> scripts/download_fulltext.py papers/raw/<today>.filtered.json
 ```
 
-This iterates over the top picks, tries the OpenAlex `open_access.oa_url` first, falls back to Unpaywall by DOI, and saves verified PDFs to `papers/fulltext/<id>.pdf` (skipping cached ones, discarding non-PDF responses). Capture the success count from the last line of output for the run log.
-
-Best-effort — some publishers (Wiley AGU, Elsevier, ACS) routinely return 0 OA hits and that's expected. The summarizer falls back to the abstract when no PDF is available.
+Capture the success count from the last line of output for the run log. This step is best-effort; when no OA PDF is available, summarization falls back to abstract-only.
 
 ### 3b. Summarize
 For each paper in the summarization list, spawn a `paper-summarizer` subagent. **Run them in parallel** — issue all the Agent tool calls in a single message. If there are more than 10, run them in batches of 10. Each subagent automatically reads `papers/fulltext/<id>.pdf` if present, otherwise uses the abstract. Each writes to `papers/notes/<id>.md` and prints its path.
 
-Papers that pass the filter but are NOT on the summarization list (score 6-7, plus excess top picks beyond the cap) do **not** get a per-paper note. They will appear in the digest using their OpenAlex abstract directly — `digest-writer` reads the filtered JSON for those.
+Papers that pass the filter but are NOT on the summarization list do **not** get a per-paper note. They appear in the digest from filtered JSON data.
 
 ### 4. Compose digest
 Spawn one `digest-writer-daily` subagent with:
@@ -131,15 +129,13 @@ Print a tight summary to the user. **Always show file paths as relative to the p
 - email status (sent / failed)
 
 ### 8b. Suggest /elsevier-catchup if useful
-After the report, scan the filtered JSON for top picks (`top_pick: true`) whose DOI starts with `10.1016/` (Elsevier — AgrForMet, FCR, Geoderma, S&TR, Water Research, SBB, One Earth) AND don't yet have a cached PDF at `papers/fulltext/<id>.pdf`. If any exist, print a one-line hint:
+After the report, scan the filtered JSON for top picks (`top_pick: true`) whose DOI starts with `10.1016/` and do not yet have a cached PDF at `papers/fulltext/<id>.pdf`. If any exist, print a one-line hint:
 
 ```
 {N} Elsevier top pick(s) without full text. Run `/elsevier-catchup` (interactive, ~2 min) to upgrade them.
 ```
 
-This makes the morning workflow obvious: midnight `/daily` runs autonomously; user checks email, runs `/elsevier-catchup` if the hint shows up. Skip the hint when N=0.
-
-You can compute this with a small inline counter (allowed because it's pure I/O, no scoring):
+Skip the hint when N=0. You can compute this with a small inline counter:
 
 ```
 <python_path> -c "import json,os,sys;d=json.load(open(sys.argv[1],encoding='utf-8'));pending=[p for p in d if p.get('top_pick') and (p.get('doi') or '').replace('https://doi.org/','').startswith('10.1016/') and not os.path.exists(f'papers/fulltext/{p[\"id\"]}.pdf')];print(len(pending))" papers/raw/<today>.filtered.json
@@ -151,16 +147,12 @@ You can compute this with a small inline counter (allowed because it's pure I/O,
 - If a `paper-filterer` subagent fails or times out, **re-spawn the subagent** (possibly on a smaller chunk per the recipe in step 2b). Do NOT replace it with a local Python scoring script — the rubric lives in `.claude/agents/paper-filterer.md` and must be applied by the model, not by hand-coded keyword lists.
 - If `paper-summarizer` fails on a particular paper, skip that paper and continue — the digest will fall back to its abstract. Do not write a local summarizer script.
 - If email fails (e.g. missing SMTP_PASSWORD), continue and clearly print the error — the markdown digest is still saved on disk.
-- The Python path comes from `config.yaml` `python_path`. If that path no longer exists, fall back to `py -3` or `python3`.
+- The Python path comes from `config.yaml` key `python_path`.
 
-## What "the agent does the reasoning" means
-The split between scripts and subagents is deliberate:
+## Responsibility split
+- API I/O, file I/O, dedup, SMTP, logging: `scripts/*.py`.
+- Relevance scoring: `paper-filterer` subagent.
+- Per-paper summarization: `paper-summarizer` subagents.
+- Theming + digest composition: `digest-writer-daily` subagent.
 
-| Concern | Where it lives |
-|---|---|
-| API I/O, file I/O, dedup, SMTP, logging | `scripts/*.py` (deterministic, no model calls) |
-| Relevance scoring (0–10 against rubric) | `paper-filterer` subagent (Haiku) |
-| Per-paper summarization | `paper-summarizer` subagents (Sonnet, parallel) |
-| Theming + digest composition | `digest-writer-daily` subagent (Sonnet) |
-
-If during a run you feel pressure to add a new `.py` file at the project root to "just get the filter done", that is a strong signal you should be spawning a subagent (or splitting input into chunks and spawning several) instead. Stop and do that.
+Do not add ad-hoc scoring or summarizing scripts to replace subagents.

@@ -41,7 +41,7 @@
 - [ ] **<title>** — <venue>, <first author> et al. — <one-line summary>. [DOI](<doi>)<" · [notes](../notes/<id>.md)" if note exists>
 - [ ] ...
 
-(only papers not already shown in "Top picks" or "By theme"; if all in-scope papers are already above, omit this section entirely. Quick-scan papers are typically score 6-7 abstract-only — but they still get checkboxes so the reader can flag any that look interesting.)
+(only papers not already shown in "Top picks" or "By theme"; if all in-scope papers are already above, omit this section entirely. Quick-scan papers are usually abstract-only entries without per-paper notes, but they still get checkboxes so the reader can flag any that look interesting.)
 ```
 
 If N == 0, write a minimal note: `# Daily Digest — <date>\n\nNo new in-scope papers today.`
