@@ -1,7 +1,0 @@
-.env
-papers/raw/
-papers/fulltext/
-.browser-downloads/
-__pycache__/
-*.pyc
-papers_old/
