@@ -24,7 +24,7 @@ Subcommands
 
 Usage examples
 --------------
-  python scripts/chunk_papers.py split papers/raw/2026-04-27.json --max 50
+  python scripts/chunk_papers.py split papers/raw/2026-04-27.json --max 30
   python scripts/chunk_papers.py merge papers/raw/2026-04-27.filtered.json \\
       "papers/raw/2026-04-27.chunk.*.filtered.json"
   python scripts/chunk_papers.py clean "papers/raw/2026-04-27.chunk.*"
@@ -159,7 +159,7 @@ def main():
 
     sp = sub.add_parser("split", help="Split a JSON array into chunks of <= --max items")
     sp.add_argument("input", help="Path to JSON array (e.g. papers/raw/<date>.json)")
-    sp.add_argument("--max", type=int, default=50, help="Max items per chunk (default 50)")
+    sp.add_argument("--max", type=int, default=30, help="Max items per chunk (default 30)")
     sp.add_argument("--out-prefix", help="Output prefix; default <input-stem>.chunk")
     sp.set_defaults(fn=cmd_split)
 

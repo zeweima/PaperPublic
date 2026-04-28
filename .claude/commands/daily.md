@@ -38,10 +38,10 @@ If you find yourself reaching for `Write` to create a `.py` file during this ste
 Run:
 
 ```
-<python_path> scripts/chunk_papers.py split papers/raw/<today>.json --max 50
+<python_path> scripts/chunk_papers.py split papers/raw/<today>.json --max 30
 ```
 
-The script writes `papers/raw/<today>.chunk.000.json`, `<today>.chunk.001.json`, … (max 50 papers each) and prints one chunk path per line on stdout. Capture them.
+The script writes `papers/raw/<today>.chunk.000.json`, `<today>.chunk.001.json`, … (max 30 papers each) and prints one chunk path per line on stdout. Capture them.
 
 If stdout is empty (raw file had `[]`), skip filtering. Write a minimal "no new papers" digest to `papers/daily/<today>.md`, update state, still proceed to email so the user knows the system ran. Jump to step 5.
 
@@ -52,7 +52,7 @@ Spawn **one `paper-filterer` subagent per chunk, all in parallel** — issue all
 - writes its filtered output to `<chunk-path>.filtered.json` (e.g. `papers/raw/<today>.chunk.000.filtered.json`)
 - prints that path on its last line
 
-The 50-paper cap means even Haiku has plenty of context headroom, and parallel filtering keeps wall-clock time roughly equal to one chunk's runtime.
+The 30-paper cap means even Haiku has plenty of context headroom, and parallel filtering keeps wall-clock time roughly equal to one chunk's runtime.
 
 #### 2c. Merge and clean
 Combine the per-chunk filterer outputs into one filtered JSON:
