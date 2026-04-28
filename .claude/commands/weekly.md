@@ -12,8 +12,7 @@ Read `python_path` from `config.yaml` for any Python invocation.
 Use the ISO calendar week ending today (Monday–Sunday). Compute `<YYYY>-W<ww>`. The 7 dates of that week are the candidate daily digest filenames in `papers/daily/`. Missing days are fine — just skip them.
 
 ### 2. Compose
-Spawn one `digest-writer` subagent with:
-- `window: weekly`
+Spawn one `digest-writer-weekly` subagent with:
 - list of daily digest paths that exist
 - previous weekly digest path (if `papers/weekly/<YYYY>-W<ww-1>.md` exists)
 - output path: `papers/weekly/<YYYY>-W<ww>.md`

@@ -15,8 +15,7 @@ Today is the run date. The target month is the previous calendar month: `<YYYY>-
 - Optionally the previous monthly digest `papers/monthly/<prev>.md` for trend comparison.
 
 ### 2. Compose
-Spawn one `digest-writer` subagent with:
-- `window: monthly`
+Spawn one `digest-writer-monthly` subagent with:
 - **list of daily digest paths in the month** (the primary input; subagent parses checked items from these)
 - list of weekly digest paths in the month (for the navigation appendix only)
 - previous monthly digest path (if any)

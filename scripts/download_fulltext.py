@@ -278,6 +278,25 @@ def load_env_var(name):
     return None
 
 
+def probe_institutional_access():
+    """Check if the current IP has institutional PDF access (e.g. UIUC campus/VPN).
+
+    Fetches the first few bytes of a known non-OA Nature article. A subscribing
+    IP receives the PDF directly (%PDF magic bytes); other IPs get an HTML paywall
+    page. Returns True only when actual PDF bytes arrive.
+    """
+    probe_url = "https://www.nature.com/articles/s41586-023-06881-4.pdf"
+    try:
+        req = urllib.request.Request(probe_url, headers={
+            "User-Agent": BROWSER_UA,
+            "Accept": "application/pdf,*/*",
+        })
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.read(5).startswith(b"%PDF")
+    except Exception:
+        return False
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("filtered", help="Path to filtered JSON (output of paper-filterer)")
@@ -291,6 +310,13 @@ def main():
     email = cfg.get("email", {}).get("from_addr", "anonymous@example.com")
     elsevier_key = load_env_var("ELSEVIER_API_KEY")
     elsevier_insttoken = load_env_var("ELSEVIER_INSTTOKEN")
+
+    has_institutional = probe_institutional_access()
+    if has_institutional:
+        print("Institutional access: confirmed (Nature/Wiley/AAAS direct PDFs enabled).")
+    else:
+        print("Institutional access: not detected — OA routes only.", file=sys.stderr)
+        print("Connect to UIUC VPN or run on campus for better coverage.", file=sys.stderr)
 
     # Read with utf-8-sig in case the filterer wrote a BOM.
     papers = json.loads(Path(args.filtered).read_text(encoding="utf-8-sig"))
@@ -336,8 +362,9 @@ def main():
             else:
                 last_msg = f"copernicus: {msg}"
 
-        # Strategy 1b: Nature family direct PDF (works from subscribing IP — e.g. UIUC campus)
-        if not success:
+        # Strategy 1b: Nature family direct PDF — requires institutional IP.
+        # Skipped when probe returned False (not on campus/VPN).
+        if not success and has_institutional:
             nat = nature_pdf_url(doi)
             if nat:
                 attempts += 1
@@ -361,8 +388,11 @@ def main():
             else:
                 last_msg = f"elsevier-api: {msg}"
 
-        # Strategy 2: publisher two-step (Wiley, AAAS) — only for OA papers
-        if not success and (oa.get("is_oa") or oa.get("oa_status") in ("gold", "hybrid", "green", "bronze")):
+        # Strategy 2: publisher two-step (Wiley, AAAS).
+        # On institutional IP: try for all papers (subscription access).
+        # Off institutional IP: OA papers only.
+        is_oa_paper = oa.get("is_oa") or oa.get("oa_status") in ("gold", "hybrid", "green", "bronze")
+        if not success and (has_institutional or is_oa_paper):
             two_step = publisher_two_step(doi)
             if two_step:
                 attempts += 1

@@ -6,6 +6,39 @@ The data files (`papers/raw/*.json`, `papers/notes/*.md`, `papers/daily|weekly|m
 
 ---
 
+## 2026-04-28 — R11: remove WebFetch fallback from paper-summarizer
+
+### Changed
+
+- **`paper-summarizer` — WebFetch step removed.** The agent previously optionally fetched the DOI landing page when no PDF was cached, on the theory that paywalled pages might expose richer abstracts or figure captions. In practice this returns HTML (not a PDF) and adds latency and token cost for no summarization benefit. The agent now has exactly two paths: read `papers/fulltext/<id>.pdf` via the Read tool (pages 1–12) if cached, otherwise use the abstract from the filtered JSON. `WebFetch` removed from the agent's `tools:` frontmatter as well.
+
+---
+
+## 2026-04-28 — R10: agent split, template extraction, institutional IP probe
+
+### Added
+
+- **`.claude/rules/digest-common.md`** — shared formatting rules (notes links, DOI format, theme names, accuracy, tone, output path) read by all three digest agents at runtime. Replaces the duplicated "General rules" section that was inlined in `digest-writer.md`.
+- **`.claude/output_styles/`** — four format template files (`paper-note.md`, `digest-daily.md`, `digest-weekly.md`, `digest-monthly.md`) previously at project root `output_styles/`. Agents read them via Read tool only when invoked; not loaded into every context window.
+- **`probe_institutional_access()` in `scripts/download_fulltext.py`** — fetches the first 5 bytes of a known non-OA Nature article at startup. `%PDF` magic bytes = confirmed institutional IP (UIUC campus/VPN); HTML paywall page = off-campus. Prints a clear status line before processing any papers.
+
+### Changed
+
+- **`digest-writer.md` split into three focused agents** — `digest-writer-daily`, `digest-writer-weekly`, `digest-writer-monthly`. Each agent loads only its own format template and the shared common rules. The monolithic 92-line agent is replaced with ~30-line specialists; the old file is kept as a deprecated stub.
+- **`.claude/commands/daily.md`** — step 4 now spawns `digest-writer-daily` (no `window:` param needed).
+- **`.claude/commands/weekly.md`** — step 2 now spawns `digest-writer-weekly`.
+- **`.claude/commands/monthly.md`** — step 2 now spawns `digest-writer-monthly`.
+- **`download_fulltext.py` strategy 1b (Nature)** — gated on `has_institutional`. When probe returns False the Nature direct-URL attempt is skipped entirely rather than making a request that will return HTML.
+- **`download_fulltext.py` strategy 2 (Wiley/AAAS two-step)** — expanded from OA-only to **all papers** when `has_institutional` is True. Subscription Wiley AGU (GRL, WRR, GBC, JAMES, JGR-BG) and AAAS papers now attempted automatically when on campus/VPN.
+
+### Reorganized
+
+- Moved `output_styles/` (root) → `.claude/output_styles/`
+- Moved `.claude/agents/rules/` → `.claude/rules/`
+- All agent and command file path references updated to new locations; old directories removed.
+
+---
+
 ## 2026-04-28 — R9: 50-paper chunking, /status, Elsevier hint
 
 ### Confirmed

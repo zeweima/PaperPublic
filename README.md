@@ -211,7 +211,7 @@ Each subagent has an explicit `model:` line in its YAML frontmatter so heavy wor
 |---|---|---|
 | `paper-filterer` | `haiku` | Bulk 0–10 scoring against a fixed rubric — pattern matching, not deep reasoning. Roughly 15× cheaper than Opus, no quality cliff. |
 | `paper-summarizer` | `sonnet` | Structured extraction from 12-page PDFs and abstracts. Quality matters because notes feed the digest. ~5× cheaper than Opus and reliably captures numbers. |
-| `digest-writer` | `sonnet` | Composition + theming over ~30 notes + 150 abstracts. ~5× cheaper, single call per digest so cost impact is small either way. |
+| `digest-writer-{daily,weekly,monthly}` | `sonnet` | Composition + theming over ~30 notes + 150 abstracts. Three focused agents — each loads only its own format template (~30 lines) rather than a monolithic 92-line agent. |
 
 **Cost comparison** (typical day: 250 fetched, 30 summarized, 1 digest):
 
@@ -275,8 +275,17 @@ scripts/
 .claude/
   agents/
     paper-filterer.md        # model: haiku
-    paper-summarizer.md      # model: sonnet
-    digest-writer.md         # model: sonnet
+    paper-summarizer.md      # model: sonnet — PDF (pages 1-12) if cached, else abstract
+    digest-writer-daily.md   # model: sonnet
+    digest-writer-weekly.md  # model: sonnet
+    digest-writer-monthly.md # model: sonnet
+  rules/
+    digest-common.md         # shared formatting rules (notes links, DOI format, themes, tone)
+  output_styles/
+    paper-note.md            # per-paper note template
+    digest-daily.md          # daily digest template
+    digest-weekly.md         # weekly digest template
+    digest-monthly.md        # monthly digest template
   commands/
     daily.md                 # /daily — fetch → filter → fulltext → summarize → digest → email → log
     weekly.md                # /weekly — aggregate 7 daily digests
@@ -286,7 +295,7 @@ scripts/
 
 .browser-downloads/           # Chrome staging folder for the interactive downloader (gitignored)
 .env                         # SMTP_PASSWORD, ELSEVIER_API_KEY, ELSEVIER_INSTTOKEN (gitignored)
-CHANGELOG.md                 # Per-round changes (R0 through R6)
+CHANGELOG.md                 # Per-round changes (R0–R11)
 README.md                    # This file
 ```
 
@@ -299,7 +308,7 @@ README.md                    # This file
 | Download OA PDFs | `scripts/download_fulltext.py` | n/a | Strategy ladder over publisher APIs / cookie sessions |
 | Score 0–10 relevance | Subagent (filterer) | Haiku 4.5 | Pattern matching against a fixed rubric |
 | Per-paper summary | Subagent ×N parallel (summarizer) | Sonnet 4.6 | Structured extraction from PDFs / abstracts |
-| Compose digest | Subagent (digest-writer) | Sonnet 4.6 | Theming + composition over notes + abstracts |
+| Compose digest | Subagent (digest-writer-{daily,weekly,monthly}) | Sonnet 4.6 | Theming + composition over notes + abstracts |
 | Send email | `scripts/send_email.py` | n/a | Pure SMTP |
 | Log run metrics | `scripts/log_run.py` | n/a | One JSON line to `papers/runs.jsonl` |
 | Schedule | Windows Task Scheduler | n/a | Local, no remote infra |

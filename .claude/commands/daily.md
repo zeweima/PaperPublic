@@ -96,8 +96,8 @@ For each paper in the summarization list, spawn a `paper-summarizer` subagent. *
 Papers that pass the filter but are NOT on the summarization list (score 6-7, plus excess top picks beyond the cap) do **not** get a per-paper note. They will appear in the digest using their OpenAlex abstract directly — `digest-writer` reads the filtered JSON for those.
 
 ### 4. Compose digest
-Spawn one `digest-writer` subagent with:
-- `window: daily`
+Spawn one `digest-writer-daily` subagent with:
+
 - the filtered JSON path
 - the list of note paths
 - output path: `papers/daily/<today>.md`
@@ -161,6 +161,6 @@ The split between scripts and subagents is deliberate:
 | API I/O, file I/O, dedup, SMTP, logging | `scripts/*.py` (deterministic, no model calls) |
 | Relevance scoring (0–10 against rubric) | `paper-filterer` subagent (Haiku) |
 | Per-paper summarization | `paper-summarizer` subagents (Sonnet, parallel) |
-| Theming + digest composition | `digest-writer` subagent (Sonnet) |
+| Theming + digest composition | `digest-writer-daily` subagent (Sonnet) |
 
 If during a run you feel pressure to add a new `.py` file at the project root to "just get the filter done", that is a strong signal you should be spawning a subagent (or splitting input into chunks and spawning several) instead. Stop and do that.

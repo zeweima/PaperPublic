@@ -1,13 +1,16 @@
 {
-  "model": "sonnet",
-  "effort": "medium",
   "permissions": {
     "allow": [
       "Bash(\"C:/Users/zeweima2/AppData/Local/miniconda3/python.exe\" *)",
       "Bash(C:/Users/zeweima2/AppData/Local/miniconda3/python.exe *)",
+      "Bash(PYTHONIOENCODING=* *)",
       "Bash(py -3 *)",
       "Bash(py *)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir -p papers/*)",
+      "PowerShell(*)",
+      "Write(papers/**)"
     ]
-  }
+  },
+  "model": "sonnet",
+  "effort": "medium"
 }
