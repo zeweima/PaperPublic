@@ -201,6 +201,28 @@ This concatenates every `papers/raw/YYYY-MM-DD.json` into `rescore_input.json`. 
 
 Use `--since 2026-01-01` to limit the rescore window.
 
+## Model selection
+
+Each subagent has an explicit `model:` line in its YAML frontmatter so heavy work doesn't go to Opus by default:
+
+| Agent | Model | Why |
+|---|---|---|
+| `paper-filterer` | `haiku` | Bulk 0–10 scoring against a fixed rubric — pattern matching, not deep reasoning. Roughly 15× cheaper than Opus, no quality cliff. |
+| `paper-summarizer` | `sonnet` | Structured extraction from 12-page PDFs and abstracts. Quality matters because notes feed the digest. ~5× cheaper than Opus and reliably captures numbers. |
+| `digest-writer` | `sonnet` | Composition + theming over ~30 notes + 150 abstracts. ~5× cheaper, single call per digest so cost impact is small either way. |
+
+**Cost comparison** (typical day: 250 fetched, 30 summarized, 1 digest):
+
+| Stage | All Opus | Tiered (current) |
+|---|---:|---:|
+| Filter | ~$3.75 | ~$0.25 |
+| Summarize | ~$13.50 | ~$2.70 |
+| Digest-write | ~$0.90 | ~$0.18 |
+| **Total / day** | **~$18** | **~$3** |
+| **Annual (daily run)** | **~$6,500** | **~$1,100** |
+
+The aliases (`haiku`, `sonnet`, `opus`) auto-resolve to the latest snapshot of each tier — no need to bump version IDs when Anthropic ships new models. To change, edit the `model:` line in [`.claude/agents/<name>.md`](.claude/agents/). For a one-off run at higher quality (e.g. monthly digest), pass `model: opus` to the specific Agent invocation.
+
 ## Tuning
 
 | Symptom | Fix |
@@ -213,42 +235,67 @@ Use `--since 2026-01-01` to limit the rescore window.
 | Missed papers indexed weeks late | Raise `lookback_days` (default 35) |
 | Want to re-process a specific day | Delete that day's ids from `seen_ids` in `state.json` and re-run `/daily` |
 | Changed `keywords` and want history rescored | Run `scripts/rescore.py` (see above) |
+| Want richer summaries on Elsevier papers | After `/daily`, run `/elsevier-catchup` (interactive, opens visible Chrome) |
+| Filter feels too lenient / strict | Try a different model for `paper-filterer` (`sonnet` for more nuance, default `haiku` for speed) |
+| Digest reads too dry / too verbose | Tune `digest-writer.md` prompt, or bump its model to `opus` for a richer voice |
+| `papers/raw/` is bloating | Default 60-day retention runs at end of `/monthly`; force-run with `python scripts/cleanup_raw.py --keep-days 30` |
+| Want to keep raw history longer | Edit `--keep-days` in `.claude/commands/monthly.md` step 5, or pass a different value when running manually |
 
 ## File layout
 
 ```
 papers/
-  config.yaml          # interests, sources, thresholds, email
-  state.json           # cursor + dedup set; updated by every run
-  raw/<date>.json      # fetched paper lists (gitignored)
-  raw/<date>.filtered.json   # filterer output
-  notes/<id>.md        # per-paper summaries (gitignored)
+  config.yaml                # journals, keywords, thresholds, email, arxiv, python_path
+  state.json                 # cursors + dedup sets (seen_ids, seen_dois)
+  runs.jsonl                 # one JSON line per /daily, /weekly, /monthly run
+  raw/<date>.json            # fetched paper lists (gitignored)
+  raw/<date>.filtered.json   # filterer output (gitignored)
+  raw/<date>.arxiv.json      # arXiv-only fetch output (gitignored)
+  raw/rescore_input.json     # produced by scripts/rescore.py (gitignored)
+  notes/<id>.md              # per-paper summaries (gitignored)
+  fulltext/<id>.pdf          # cached open-access / authorized PDFs (gitignored)
   daily/<date>.md
   weekly/<YYYY-Www>.md
   monthly/<YYYY-MM>.md
 
 scripts/
-  fetch.py             # OpenAlex fetcher
-  send_email.py        # SMTP sender
+  fetch.py                   # OpenAlex fetcher (29 journals)
+  fetch_arxiv.py             # arXiv preprint fetcher (6 categories)
+  download_fulltext.py       # OA PDF downloader (Copernicus, Wiley, AAAS, Nature, Elsevier API)
+  download_fulltext_browser.py  # Interactive Selenium fallback for Elsevier / ACS
+  send_email.py              # Gmail SMTP sender
+  rescore.py                 # Re-filter all stored raw JSONs after a config change
+  log_run.py                 # Append a structured entry to papers/runs.jsonl
+  cleanup_raw.py             # Delete raw JSONs older than --keep-days (default 60)
 
 .claude/
   agents/
-    paper-filterer.md
-    paper-summarizer.md
-    digest-writer.md
+    paper-filterer.md        # model: haiku
+    paper-summarizer.md      # model: sonnet
+    digest-writer.md         # model: sonnet
   commands/
-    daily.md
-    weekly.md
-    monthly.md
+    daily.md                 # /daily — fetch → filter → fulltext → summarize → digest → email → log
+    weekly.md                # /weekly — aggregate 7 daily digests
+    monthly.md               # /monthly — aggregate 4 weekly digests
+    elsevier-catchup.md      # /elsevier-catchup — interactive Elsevier full-text run
+
+.browser-downloads/           # Chrome staging folder for the interactive downloader (gitignored)
+.env                         # SMTP_PASSWORD, ELSEVIER_API_KEY, ELSEVIER_INSTTOKEN (gitignored)
+CHANGELOG.md                 # Per-round changes (R0 through R6)
+README.md                    # This file
 ```
 
 ## What runs where
 
-| Step | Where | Why |
-|---|---|---|
-| Fetch from OpenAlex | Python script | Pure I/O, no reasoning |
-| Score 0-10 relevance | Subagent (filterer) | Needs judgment over title+abstract |
-| Per-paper summary | Subagent ×N parallel (summarizer) | Isolated context per paper, fast |
-| Compose digest | Subagent (digest-writer) | Reads notes, themes, structures |
-| Send email | Python script | Pure SMTP |
-| Schedule | Windows Task Scheduler | Local, no remote infra |
+| Step | Where | Model | Why |
+|---|---|---|---|
+| Fetch from OpenAlex (29 journals) | `scripts/fetch.py` | n/a | Pure I/O, no reasoning |
+| Fetch from arXiv (6 categories) | `scripts/fetch_arxiv.py` | n/a | Pure I/O, polite rate limits |
+| Download OA PDFs | `scripts/download_fulltext.py` | n/a | Strategy ladder over publisher APIs / cookie sessions |
+| Score 0–10 relevance | Subagent (filterer) | Haiku 4.5 | Pattern matching against a fixed rubric |
+| Per-paper summary | Subagent ×N parallel (summarizer) | Sonnet 4.6 | Structured extraction from PDFs / abstracts |
+| Compose digest | Subagent (digest-writer) | Sonnet 4.6 | Theming + composition over notes + abstracts |
+| Send email | `scripts/send_email.py` | n/a | Pure SMTP |
+| Log run metrics | `scripts/log_run.py` | n/a | One JSON line to `papers/runs.jsonl` |
+| Schedule | Windows Task Scheduler | n/a | Local, no remote infra |
+| Manual Elsevier catch-up | `scripts/download_fulltext_browser.py` | n/a | Selenium + undetected-chromedriver, real Chrome, interactive |

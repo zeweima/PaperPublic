@@ -34,3 +34,7 @@ Can you get full text (e.g., PDF, XML)? Remember to maintain a log file for the 
 ## Refine - R5
 
 If there is a way that we can bypass the `Elsevier` one? All the processing can be done in the midnight. Thus, we could have a larger wait time to reduce the visit frequency.
+
+## Refine - R7
+
+- Given we will pull the paper from past several days. Could you confirm the agents will not exam the exsiting record?

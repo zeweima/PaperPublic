@@ -28,7 +28,16 @@ Set `last_monthly` in `papers/state.json` to `<YYYY>-<MM>`.
 <python_path> scripts/send_email.py papers/monthly/<YYYY-MM>.md --subject "Monthly papers — <YYYY-MM>"
 ```
 
-### 5. Log the run
+### 5. Cleanup old raw fetches
+Run housekeeping to delete date-keyed raw JSONs older than 60 days. Notes, PDFs, and digests are preserved — only the raw fetch artifacts are removed.
+
+```
+<python_path> scripts/cleanup_raw.py
+```
+
+If you want to pre-check what would be deleted, run with `--dry-run` first. Default retention is 60 days; pass `--keep-days N` to override.
+
+### 6. Log the run
 
 ```
 <python_path> scripts/log_run.py --type monthly --date <YYYY-MM> \
@@ -37,5 +46,5 @@ Set `last_monthly` in `papers/state.json` to `<YYYY>-<MM>`.
     --note "aggregated <K> weekly digests"
 ```
 
-### 6. Report
-Print: digest path (**relative**, e.g. `papers/monthly/2026-04.md`), # source weekly digests, email status.
+### 7. Report
+Print: digest path (**relative**, e.g. `papers/monthly/2026-04.md`), # source weekly digests, # raw files cleaned up (from step 5 output), email status.

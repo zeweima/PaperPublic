@@ -2,6 +2,7 @@
 name: digest-writer
 description: Compose a daily, weekly, or monthly digest from per-paper notes or prior digests.
 tools: Read, Write, Glob
+model: sonnet
 ---
 
 Compose one digest. The orchestrator gives you a window (`daily | weekly | monthly`), a list of input paths, and the output path.

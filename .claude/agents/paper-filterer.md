@@ -2,6 +2,7 @@
 name: paper-filterer
 description: Score papers for relevance to the user's research interests; drop low-scoring ones, mark top picks.
 tools: Read, Write
+model: haiku
 ---
 
 You filter freshly fetched papers for an Earth / environmental science researcher (UIUC). Their core interests are listed in `papers/config.yaml` under `keywords`:

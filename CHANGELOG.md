@@ -6,6 +6,46 @@ The data files (`papers/raw/*.json`, `papers/notes/*.md`, `papers/daily|weekly|m
 
 ---
 
+## 2026-04-27 — R7: raw history retention (60-day cleanup)
+
+### Added
+- **`scripts/cleanup_raw.py`** — deletes date-keyed raw fetch JSONs older than `--keep-days` (default 60). Matches `papers/raw/YYYY-MM-DD.json`, `*.filtered.json`, `*.arxiv.json`, etc. Skips non-date-keyed files like `rescore_input.json`. Supports `--dry-run`.
+- **`/monthly` step 5: cleanup** — runs `scripts/cleanup_raw.py` at the end of each monthly digest as natural housekeeping.
+
+### Why this design
+- Notes (`papers/notes/<id>.md`), full-text PDFs (`papers/fulltext/<id>.pdf`), and digests (`papers/{daily,weekly,monthly}/`) are **kept indefinitely** — they're the persistent value of the system.
+- Raw fetch JSONs are intermediate artifacts: they're only re-read by `scripts/rescore.py` if you change `keywords` and want history re-evaluated. After 60 days, that re-evaluation window has limited value (interests don't shift often), so the disk cost outweighs.
+- Dedup state (`seen_ids` / `seen_dois` in `state.json`) is unaffected — already-fetched papers stay deduped even after their raw JSON is gone, preventing accidental re-summarization.
+- One-time bootstrap raw files (>60 days old at scaffold time) are removed on the first monthly run after deployment.
+
+### Tradeoff
+- After cleanup, `scripts/rescore.py` can only re-evaluate the last 60 days of papers. If the user wants longer history (e.g. annual rescore on a pivot to a new research direction), they can bump `--keep-days` in the slash command.
+
+---
+
+## 2026-04-27 — R6: per-agent model selection
+
+### Changed
+- **`paper-filterer` → Haiku 4.5** (was Opus 4.7). Bulk classification with a fixed rubric — Haiku is plenty for "is this paper about hydrology / Earth-system science?" Roughly 15× cheaper.
+- **`paper-summarizer` → Sonnet 4.6** (was Opus 4.7). Structured extraction from PDFs (pages 1-12) and abstracts. Sonnet is reliable for finding numbers and writing tight bullets; ~5× cheaper.
+- **`digest-writer` → Sonnet 4.6** (was Opus 4.7). Composition + theming over a moderate context. Sonnet is fine here. ~5× cheaper.
+
+### Cost model (typical day, 250 fetched / 30 summarized)
+
+| Stage | Before (all Opus) | After (tiered) |
+|---|---:|---:|
+| Filter | ~$3.75 | ~$0.25 |
+| Summarize | ~$13.50 | ~$2.70 |
+| Digest-write | ~$0.90 | ~$0.18 |
+| **Total** | **~$18 / day** | **~$3 / day** |
+
+~6× reduction in daily run cost (~$1100/yr vs ~$6500/yr if scheduled daily).
+
+### Implementation
+One-line addition to each agent's YAML frontmatter (`model: haiku` or `model: sonnet`). Aliases auto-resolve to the latest snapshot of that tier. Override per-call by passing `model:` in the Agent tool call if needed for a specific run.
+
+---
+
 ## 2026-04-27 — R5b: interactive browser fallback for Elsevier / ACS
 
 ### Added

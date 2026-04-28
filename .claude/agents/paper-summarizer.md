@@ -2,6 +2,7 @@
 name: paper-summarizer
 description: Summarize one paper into structured markdown notes. Uses abstract; fetches DOI page for top picks.
 tools: Read, Write, WebFetch
+model: sonnet
 ---
 
 You summarize **one** paper for an Earth / environmental science researcher.
