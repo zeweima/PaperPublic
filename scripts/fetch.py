@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "papers" / "config.yaml"
+CONFIG_PATH = ROOT / "config.yaml"
 STATE_PATH = ROOT / "papers" / "state.json"
 RAW_DIR = ROOT / "papers" / "raw"
 OPENALEX = "https://api.openalex.org/works"

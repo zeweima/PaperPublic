@@ -6,7 +6,7 @@ type: user
 
 User is a researcher in Earth / environmental science, almost certainly at UIUC (path contains "University of Illinois - Urbana", email is `uiucascteam2021@gmail.com` — likely an Atmospheric Sciences / College team account).
 
-Core research interests (from `papers/config.yaml` they specified for the paper tracker):
+Core research interests (from `config.yaml` they specified for the paper tracker):
 - Watershed hydrology, water quality, water resources
 - Biogeochemistry, soil science, agroecosystem modeling
 - Land-surface modeling, climate change

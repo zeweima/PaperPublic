@@ -6,7 +6,7 @@ Run the daily paper-tracking pipeline. Today's date in UTC is the run date.
 
 ## Python interpreter
 
-Read `python_path` from `papers/config.yaml` and use that for every Python invocation below. On this machine the correct path is `C:/Users/zeweima2/AppData/Local/miniconda3/python.exe` — bare `python` will hit a Windows Store stub and fail.
+Read `python_path` from `config.yaml` and use that for every Python invocation below. On this machine the correct path is `C:/Users/zeweima2/AppData/Local/miniconda3/python.exe` — bare `python` will hit a Windows Store stub and fail.
 
 ## Pipeline
 
@@ -25,12 +25,54 @@ This pulls preprints in the configured arXiv categories and appends them into to
 Skip silently if arxiv is disabled.
 
 ### 2. Filter
-Read the raw JSON to check the count.
-- If empty, write a minimal "no new papers" digest to `papers/daily/<today>.md`, update state, skip emailing? No — still email so the user knows the system ran. Compose a one-line digest and proceed to step 6.
-- Otherwise, spawn one `paper-filterer` subagent and pass the raw JSON path. Capture the filtered JSON path it prints.
+
+**HARD RULE — relevance scoring MUST be done by the `paper-filterer` subagent.** Do **not**, under any circumstance:
+- write a local `filter_*.py` / `score_*.py` / `do_filter.*` script at the project root (or anywhere) that re-implements the scoring rubric in Python keyword lists,
+- shell out to a one-off Python `-c "..."` that scores papers,
+- bypass the subagent because the input "feels too big" — use the chunking recipe below instead,
+- generate any other ad-hoc helper script. The only legitimate Python scripts in this pipeline are the ones already in `scripts/` (`fetch.py`, `fetch_arxiv.py`, `download_fulltext.py`, `send_email.py`, `log_run.py`, `cleanup_raw.py`, `rescore.py`). Do not add new ones from inside `/daily`.
+
+If you find yourself reaching for `Write` to create a `.py` file during this step, STOP — that is the failure mode this rule exists to prevent. Spawn the subagent instead.
+
+#### 2a. Always chunk the raw JSON
+Run:
+
+```
+<python_path> scripts/chunk_papers.py split papers/raw/<today>.json --max 50
+```
+
+The script writes `papers/raw/<today>.chunk.000.json`, `<today>.chunk.001.json`, … (max 50 papers each) and prints one chunk path per line on stdout. Capture them.
+
+If stdout is empty (raw file had `[]`), skip filtering. Write a minimal "no new papers" digest to `papers/daily/<today>.md`, update state, still proceed to email so the user knows the system ran. Jump to step 5.
+
+#### 2b. Filter each chunk (parallel subagents)
+Spawn **one `paper-filterer` subagent per chunk, all in parallel** — issue all the Agent tool calls in a single message. Each subagent:
+- receives the path to its chunk
+- applies the rubric in `.claude/agents/paper-filterer.md`
+- writes its filtered output to `<chunk-path>.filtered.json` (e.g. `papers/raw/<today>.chunk.000.filtered.json`)
+- prints that path on its last line
+
+The 50-paper cap means even Haiku has plenty of context headroom, and parallel filtering keeps wall-clock time roughly equal to one chunk's runtime.
+
+#### 2c. Merge and clean
+Combine the per-chunk filterer outputs into one filtered JSON:
+
+```
+<python_path> scripts/chunk_papers.py merge papers/raw/<today>.filtered.json "papers/raw/<today>.chunk.*.filtered.json"
+```
+
+`merge` dedupes by `id` (defensive — chunks shouldn't overlap, but if a paper somehow appears twice we keep one copy).
+
+Delete the per-chunk artifacts so `papers/raw/` stays tidy:
+
+```
+<python_path> scripts/chunk_papers.py clean "papers/raw/<today>.chunk.*"
+```
+
+The final filtered path used by the rest of the pipeline is always `papers/raw/<today>.filtered.json`.
 
 ### 3. Summarize (parallel, capped)
-Read `max_summaries_per_run` from `papers/config.yaml` (default 30) and `top_picks_threshold` (default 8).
+Read `max_summaries_per_run` from `config.yaml` (default 30) and `top_picks_threshold` (default 8).
 
 From the filtered JSON, build a **summarization list**:
 - Take all papers with `top_pick: true` (i.e. score >= 8).
@@ -88,8 +130,37 @@ Print a tight summary to the user. **Always show file paths as relative to the p
 - digest path (relative)
 - email status (sent / failed)
 
+### 8b. Suggest /elsevier-catchup if useful
+After the report, scan the filtered JSON for top picks (`top_pick: true`) whose DOI starts with `10.1016/` (Elsevier — AgrForMet, FCR, Geoderma, S&TR, Water Research, SBB, One Earth) AND don't yet have a cached PDF at `papers/fulltext/<id>.pdf`. If any exist, print a one-line hint:
+
+```
+{N} Elsevier top pick(s) without full text. Run `/elsevier-catchup` (interactive, ~2 min) to upgrade them.
+```
+
+This makes the morning workflow obvious: midnight `/daily` runs autonomously; user checks email, runs `/elsevier-catchup` if the hint shows up. Skip the hint when N=0.
+
+You can compute this with a small inline counter (allowed because it's pure I/O, no scoring):
+
+```
+<python_path> -c "import json,os,sys;d=json.load(open(sys.argv[1],encoding='utf-8'));pending=[p for p in d if p.get('top_pick') and (p.get('doi') or '').replace('https://doi.org/','').startswith('10.1016/') and not os.path.exists(f'papers/fulltext/{p[\"id\"]}.pdf')];print(len(pending))" papers/raw/<today>.filtered.json
+```
+
 ## Failure handling
 - Per-source fetch failures are logged by the script and the run continues — that's fine.
 - If `paper-filterer` returns nothing kept, still write a digest stating "0 in-scope papers from N fetched".
+- If a `paper-filterer` subagent fails or times out, **re-spawn the subagent** (possibly on a smaller chunk per the recipe in step 2b). Do NOT replace it with a local Python scoring script — the rubric lives in `.claude/agents/paper-filterer.md` and must be applied by the model, not by hand-coded keyword lists.
+- If `paper-summarizer` fails on a particular paper, skip that paper and continue — the digest will fall back to its abstract. Do not write a local summarizer script.
 - If email fails (e.g. missing SMTP_PASSWORD), continue and clearly print the error — the markdown digest is still saved on disk.
-- The Python path comes from `papers/config.yaml` `python_path`. If that path no longer exists, fall back to `py -3` or `python3`.
+- The Python path comes from `config.yaml` `python_path`. If that path no longer exists, fall back to `py -3` or `python3`.
+
+## What "the agent does the reasoning" means
+The split between scripts and subagents is deliberate:
+
+| Concern | Where it lives |
+|---|---|
+| API I/O, file I/O, dedup, SMTP, logging | `scripts/*.py` (deterministic, no model calls) |
+| Relevance scoring (0–10 against rubric) | `paper-filterer` subagent (Haiku) |
+| Per-paper summarization | `paper-summarizer` subagents (Sonnet, parallel) |
+| Theming + digest composition | `digest-writer` subagent (Sonnet) |
+
+If during a run you feel pressure to add a new `.py` file at the project root to "just get the filter done", that is a strong signal you should be spawning a subagent (or splitting input into chunks and spawning several) instead. Stop and do that.

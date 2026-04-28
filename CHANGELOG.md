@@ -6,6 +6,40 @@ The data files (`papers/raw/*.json`, `papers/notes/*.md`, `papers/daily|weekly|m
 
 ---
 
+## 2026-04-28 — R9: 50-paper chunking, /status, Elsevier hint
+
+### Confirmed
+- **Filtering remains agent-driven** — the HARD RULE in `.claude/commands/daily.md` step 2 forbids any local Python scoring helper and points all relevance work at the `paper-filterer` subagent (Haiku 4.5). No keyword-list scoring touches the input.
+- **Elsevier path is integrated** — `/daily` runs `scripts/download_fulltext.py` (Copernicus / Wiley / AAAS / Nature direct + Elsevier API teaser detection). The interactive browser fallback lives in `/elsevier-catchup` for the morning follow-up. `/daily` step 8b now prints a hint when Elsevier top picks lack PDFs, so the user knows when to run the catch-up.
+
+### Added
+- **`scripts/chunk_papers.py`** — three subcommands:
+  - `split <input> [--max 50]`: write `<input>.chunk.000.json`, `…001.json`, … and print paths.
+  - `merge <output> <chunks…|globs>`: concatenate chunks (dedup by `id`) into one JSON.
+  - `clean <glob>`: delete the per-chunk artifacts.
+  Replaces the inline `python -c …` chunking recipe in `/daily`. Round-trip verified on 505-paper input: 11 chunks of ≤50 → merged back to 505 unique.
+- **`/status` slash command** — prints a one-screen health check: state cursors, cache sizes (notes / fulltext / raw / digests), env-var presence (SMTP / Elsevier key / Insttoken without leaking values), last 5 entries from `runs.jsonl`, and the Windows Task Scheduler state of all three scheduled tasks.
+- **`/daily` step 8b** — explicit "{N} Elsevier top pick(s) without full text. Run `/elsevier-catchup` …" hint after the report. One inline counter (pure I/O, allowed) computes N. Skipped when N=0.
+
+### Changed
+- **`/daily` step 2**: replaced the count-then-decide "if ≤200 single agent / else inline chunk" branch with **always chunk via `chunk_papers.py split --max 50`** + parallel filterers, then `merge` and `clean`. Simpler code path, smaller per-subagent context, more headroom for Haiku.
+- Chunk size lowered from 150 → 50 per the user's preference.
+
+---
+
+## 2026-04-27 — R8: move config.yaml to project root
+
+### Changed
+- **`papers/config.yaml` → `config.yaml`** (project root). Lets the user wipe `papers/` for a fresh run without losing their journal list, keywords, thresholds, email setup, and `python_path`.
+- Updated `CONFIG_PATH = ROOT / "config.yaml"` in `scripts/fetch.py`, `scripts/fetch_arxiv.py`, `scripts/download_fulltext.py`, `scripts/send_email.py`.
+- Updated all references in `.claude/commands/{daily,weekly,monthly,elsevier-catchup}.md`, `.claude/agents/paper-filterer.md`, `scripts/rescore.py`, `README.md`, `memory/user_role.md`.
+- README file-layout diagram now shows `config.yaml` at top level, not nested under `papers/`.
+
+### Note
+Older CHANGELOG entries still reference the old path `papers/config.yaml` — left as-is (historical record).
+
+---
+
 ## 2026-04-27 — R7: raw history retention (60-day cleanup)
 
 ### Added

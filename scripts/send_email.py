@@ -15,7 +15,7 @@ except ImportError:
     md_lib = None
 
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "papers" / "config.yaml"
+CONFIG_PATH = ROOT / "config.yaml"
 
 
 def load_password():

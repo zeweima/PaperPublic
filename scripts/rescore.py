@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-evaluate previously-fetched papers without re-fetching.
 
-Useful when you change `keywords` or thresholds in `papers/config.yaml` and
+Useful when you change `keywords` or thresholds in `config.yaml` and
 want past papers re-scored under the new criteria. This script:
 
   1. Reads every `papers/raw/YYYY-MM-DD.json` (the originals, not the .filtered ones)

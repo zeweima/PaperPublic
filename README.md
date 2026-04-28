@@ -30,7 +30,7 @@ schtasks (Windows)
 
 ## One-time setup
 
-The system uses **miniconda's base Python** at `C:\Users\zeweima2\AppData\Local\miniconda3\python.exe`. Bare `python` on PATH resolves to a Microsoft Store stub on this machine and won't work — that's why `papers/config.yaml` contains an explicit `python_path`.
+The system uses **miniconda's base Python** at `C:\Users\zeweima2\AppData\Local\miniconda3\python.exe`. Bare `python` on PATH resolves to a Microsoft Store stub on this machine and won't work — that's why `config.yaml` contains an explicit `python_path`.
 
 1. **Python deps** (already installed; redo only if you reinstall conda):
    ```cmd
@@ -43,7 +43,7 @@ The system uses **miniconda's base Python** at `C:\Users\zeweima2\AppData\Local\
    :: paste the 16-char password into .env (no spaces)
    ```
 
-3. **Recipients.** Edit `papers/config.yaml` → `email.recipients`. Add other addresses one per line.
+3. **Recipients.** Edit `config.yaml` → `email.recipients`. Add other addresses one per line.
 
 4. **Smoke test fetch:**
    ```cmd
@@ -60,9 +60,11 @@ The system uses **miniconda's base Python** at `C:\Users\zeweima2\AppData\Local\
 ## Daily use
 
 Inside Claude Code, in this directory:
-- `/daily` — fetch, filter, summarize, digest, email
+- `/daily` — fetch, filter, summarize, digest, email (autonomous, scheduled overnight)
+- `/elsevier-catchup` — interactive Chrome run to upgrade Elsevier top picks from abstract to full-text. Run in the morning if `/daily` printed the "Elsevier top picks without full text" hint.
 - `/weekly` — aggregate the past 7 daily digests, email
 - `/monthly` — aggregate last month's weekly digests, email
+- `/status` — one-screen health check (state cursors, cache sizes, env-var presence, recent runs, scheduled tasks)
 
 ## Schedule on Windows Task Scheduler
 
@@ -71,15 +73,15 @@ Open `taskschd.msc` and create three tasks, or run from cmd as admin:
 ```cmd
 schtasks /create /tn "PaperTracker-Daily" ^
   /tr "cmd /c cd /d \"C:\Users\zeweima2\OneDrive - University of Illinois - Urbana\ClaudeCode\PaperSummarizing\" && claude -p \"/daily\"" ^
-  /sc daily /st 08:00
+  /sc daily /st 02:00
 
 schtasks /create /tn "PaperTracker-Weekly" ^
   /tr "cmd /c cd /d \"C:\Users\zeweima2\OneDrive - University of Illinois - Urbana\ClaudeCode\PaperSummarizing\" && claude -p \"/weekly\"" ^
-  /sc weekly /d MON /st 09:00
+  /sc weekly /d MON /st 03:00
 
 schtasks /create /tn "PaperTracker-Monthly" ^
   /tr "cmd /c cd /d \"C:\Users\zeweima2\OneDrive - University of Illinois - Urbana\ClaudeCode\PaperSummarizing\" && claude -p \"/monthly\"" ^
-  /sc monthly /mo first /d MON /st 09:00
+  /sc monthly /mo first /d MON /st 04:00
 ```
 
 (The monthly form above runs on the first Monday — adjust to `/d 1` for the 1st of the month if you prefer; `schtasks` syntax is finicky, the GUI is often easier.)
@@ -141,7 +143,7 @@ When no OA / accessible copy is found, the summarizer falls back to the abstract
 
 The system pulls from two sources, deduped against each other and against state:
 
-- **OpenAlex** — 29 journals (see `papers/config.yaml` `sources` list). Includes the Earth-system stack (Copernicus, AGU/Wiley, Elsevier env titles, Nature/Science family), the new AGU OA journals (Earth's Future, JGR ML&C, Nature Water), and the rest.
+- **OpenAlex** — 29 journals (see `config.yaml` `sources` list). Includes the Earth-system stack (Copernicus, AGU/Wiley, Elsevier env titles, Nature/Science family), the new AGU OA journals (Earth's Future, JGR ML&C, Nature Water), and the rest.
 - **arXiv** — preprints in 6 categories (`physics.ao-ph`, `physics.flu-dyn`, `cs.LG`, `stat.ML`, `eess.IV`, `cs.CV`). Always OA, always with full-text PDFs available. Caught by the same filterer / summarizer / digest pipeline as journal articles. arXiv preprints often appear weeks before journal publication, so this is the leading edge of the digest.
 
 The arXiv fetcher (`scripts/fetch_arxiv.py`) runs after the OpenAlex fetcher in `/daily`, appending its results into the same raw JSON. To disable arXiv, set `arxiv.enabled: false` in config.
@@ -189,7 +191,7 @@ OpenAlex sometimes indexes a paper days or weeks after its `publication_date`. T
 
 ## Re-scoring after a config change
 
-If you change `keywords` or thresholds in `papers/config.yaml` and want past papers re-evaluated under the new criteria — without re-hitting OpenAlex:
+If you change `keywords` or thresholds in `config.yaml` and want past papers re-evaluated under the new criteria — without re-hitting OpenAlex:
 
 ```cmd
 "%LOCALAPPDATA%\miniconda3\python.exe" scripts\rescore.py
@@ -227,7 +229,7 @@ The aliases (`haiku`, `sonnet`, `opus`) auto-resolve to the latest snapshot of e
 
 | Symptom | Fix |
 |---|---|
-| Too many low-relevance papers | Raise `relevance_threshold` in `papers/config.yaml` (e.g. 6 → 7) |
+| Too many low-relevance papers | Raise `relevance_threshold` in `config.yaml` (e.g. 6 → 7) |
 | Too few papers | Lower threshold, or add more keywords |
 | Want fewer or more full notes per day | Adjust `max_summaries_per_run` (default 30) |
 | Want stricter "top pick" bar | Raise `top_picks_threshold` (e.g. 8 → 9) |
@@ -244,8 +246,9 @@ The aliases (`haiku`, `sonnet`, `opus`) auto-resolve to the latest snapshot of e
 ## File layout
 
 ```
+config.yaml                  # journals, keywords, thresholds, email, arxiv, python_path
+
 papers/
-  config.yaml                # journals, keywords, thresholds, email, arxiv, python_path
   state.json                 # cursors + dedup sets (seen_ids, seen_dois)
   runs.jsonl                 # one JSON line per /daily, /weekly, /monthly run
   raw/<date>.json            # fetched paper lists (gitignored)
@@ -267,6 +270,7 @@ scripts/
   rescore.py                 # Re-filter all stored raw JSONs after a config change
   log_run.py                 # Append a structured entry to papers/runs.jsonl
   cleanup_raw.py             # Delete raw JSONs older than --keep-days (default 60)
+  chunk_papers.py            # split / merge / clean for parallel filter subagents (max 50/chunk)
 
 .claude/
   agents/
@@ -278,6 +282,7 @@ scripts/
     weekly.md                # /weekly — aggregate 7 daily digests
     monthly.md               # /monthly — aggregate 4 weekly digests
     elsevier-catchup.md      # /elsevier-catchup — interactive Elsevier full-text run
+    status.md                # /status — one-screen health check (state, cache, env, scheduled tasks)
 
 .browser-downloads/           # Chrome staging folder for the interactive downloader (gitignored)
 .env                         # SMTP_PASSWORD, ELSEVIER_API_KEY, ELSEVIER_INSTTOKEN (gitignored)

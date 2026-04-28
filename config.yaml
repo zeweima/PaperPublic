@@ -32,7 +32,7 @@ keywords:
 # of each month, so we need at least ~35 days of lookback to consistently see
 # them. Dedup via state.seen_ids prevents resummarization, so this only costs
 # extra API calls, not duplicate work in the digest.
-lookback_days: 35
+lookback_days: 5
 
 # Python interpreter used by the slash commands. On this machine `python` on PATH
 # resolves to a Microsoft Store stub; we use the miniconda base instead.

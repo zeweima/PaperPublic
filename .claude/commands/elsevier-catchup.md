@@ -12,7 +12,7 @@ This is an **interactive** command — it opens a visible Chrome window and may 
 Default: `papers/raw/<today>.filtered.json`. If a more recent date exists, use that instead. If no filtered JSON exists, exit with a clear message ("run /daily first").
 
 ### 2. Run the browser downloader
-Read `python_path` from `papers/config.yaml`. Run:
+Read `python_path` from `config.yaml`. Run:
 
 ```
 <python_path> scripts/download_fulltext_browser.py papers/raw/<today>.filtered.json --max 10

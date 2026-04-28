@@ -27,7 +27,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "papers" / "config.yaml"
+CONFIG_PATH = ROOT / "config.yaml"
 FT_DIR = ROOT / "papers" / "fulltext"
 UNPAYWALL = "https://api.unpaywall.org/v2/{doi}?email={email}"
 

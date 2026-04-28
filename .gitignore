@@ -2,8 +2,7 @@
 papers/raw/
 papers/notes/
 papers/fulltext/
-papers/monthly/
-papers/weekly/
 .browser-downloads/
 __pycache__/
 *.pyc
+papers_old/

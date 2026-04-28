@@ -4,7 +4,7 @@ description: Aggregate the past 7 daily digests into a weekly digest, email it.
 
 Compose this week's digest. **No fetching, no re-summarizing** — pure aggregation of existing daily digests.
 
-Read `python_path` from `papers/config.yaml` for any Python invocation.
+Read `python_path` from `config.yaml` for any Python invocation.
 
 ## Pipeline
 
