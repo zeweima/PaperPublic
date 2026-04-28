@@ -1,6 +1,5 @@
 .env
 papers/raw/
-papers/notes/
 papers/fulltext/
 .browser-downloads/
 __pycache__/
