@@ -18,4 +18,4 @@ FNO outperforms PINN for floating offshore wind turbine wake prediction — ~8x 
 - **Caveats:** Study limited to uniform inflow (no atmospheric turbulence), prescribed surge-pitch motions only (not full 6-DOF), 2D PINN formulation; generalizability to farm-scale interactions and turbulent inflow untested; FNO trained on single-turbine LES data so out-of-distribution St or motion amplitudes need evaluation.
 
 ## Tags
-ML remote-sensing agroecosystem LSM
+ML climate
