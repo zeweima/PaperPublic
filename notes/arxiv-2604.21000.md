@@ -18,4 +18,4 @@ Surfactant (SDS) boosts submicron sea spray aerosol production 2–4× at optima
 - **Caveats:** SDS is a single model anionic surfactant (mimicking biogenic lipids); results may not generalise to the full diversity of marine organics. Experiments use artificial seawater; no direct validation against open-ocean measurements. Exact efficiency magnitudes are sensitive to the chosen bubble-size and aerosol-size integration ranges.
 
 ## Tags
-biogeochem remote-sensing climate ML
+biogeochem climate water-quality
